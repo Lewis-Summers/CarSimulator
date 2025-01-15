@@ -1,20 +1,144 @@
 import pygame as pg
 import math
 
+
+def positionUpdates2(currentSpeed, frontAxleRotation, carRotation):
+    # TODO: next step is figure out how speed and front axle rotation effects car rotation
+    print(player_pos.y)
+    print(player_pos.x)
+    frontAxlePosition, rearAxlePosition = calculateAxlePosition(carRotation)
+    if frontAxleRotation != 0:
+        turningRadius = carWidth / math.sin(frontAxleRotation)
+        angularVelocity = currentSpeed / turningRadius
+    else:
+        angularVelocity = 0
+
+    carRotation += angularVelocity * dt
+    displacement = currentSpeed * dt
+    translation = (
+        math.cos(carRotation) * displacement,
+        math.sin(carRotation) * displacement
+    )
+    player_pos.x = player_pos.x + translation[0]
+    player_pos.y = player_pos.y + translation[1]
+    # if currentSpeed != 0:
+    #     distance = currentSpeed * dt
+    #     player_pos.y += distance * math.sin(carRotation)
+    #     player_pos.x += distance * math.cos(carRotation)
+    print(player_pos.y)
+    print(player_pos.x)
+    return player_pos, carRotation
+
+
+def positionUpdates3(currentSpeed, frontAxleRotation, carRotation):
+    # TODO: next step is figure out how speed and front axle rotation effects car rotation
+    print(player_pos.y)
+    print(player_pos.x)
+    frontAxlePosition, rearAxlePosition = calculateAxlePosition(carRotation)
+    heading_angle = math.atan2(frontAxlePosition[1] - rearAxlePosition[1],
+                               frontAxlePosition[0] - rearAxlePosition[0])
+
+    # Update rear axle to follow front axle
+    rearAxlePosition[0] += currentSpeed * dt * math.cos(heading_angle)
+    rearAxlePosition[1] += currentSpeed * dt * math.sin(heading_angle)
+
+    angularForce = 0
+    turningRadius = None
+
+    # Update front axle based on steering angle
+    if frontAxleRotation != 0:
+        turningRadius = carWidth / math.sin(frontAxleRotation)
+        frontAxlePosition[0] += currentSpeed * dt * math.cos(heading_angle + frontAxleRotation)
+        frontAxlePosition[1] += currentSpeed * dt * math.sin(heading_angle + frontAxleRotation)
+    # if frontAxleRotation != 0:
+    #     turningRadius = carWidth / math.sin(frontAxleRotation)
+    #     # angleChange = turningRadius*dt
+    #     # angularVelocity = currentSpeed / turningRadius
+    #     player_pos.x += currentSpeed * dt * math.cos(frontAxleRotation)
+    #     player_pos.y += currentSpeed * dt * math.sin(frontAxleRotation)
+
+    else:
+        distance = currentSpeed * dt
+        player_pos.y += distance * math.sin(carRotation)
+        player_pos.x += distance * math.cos(carRotation)
+
+    print(carRotation)
+    return player_pos, carRotation, frontAxleRotation
+
+
+def positionUpdates(currentSpeed, frontAxleRotationRadians, carRotationRadians):
+    # Calculate front and rear axle positions
+    frontAxle, rearAxle = calculateAxlePosition(carRotationRadians)
+
+    # Update the front axle based on steering angle
+    if frontAxleRotationRadians != 0:
+        turningRadius = 50 / math.sin(frontAxleRotationRadians)  # Adjust for car width
+        frontAxle = (
+            frontAxle[0] + currentSpeed * dt * math.cos(carRotationRadians + frontAxleRotationRadians),
+            frontAxle[1] + currentSpeed * dt * math.sin(carRotationRadians + frontAxleRotationRadians)
+        )
+
+    # Calculate heading angle (car rotation) based on front and rear axle positions
+    carRotationRadians = math.atan2(frontAxle[1] - rearAxle[1], frontAxle[0] - rearAxle[0])
+
+    # Update rear axle to follow the front axle
+    rearAxle = (
+        rearAxle[0] + currentSpeed * dt * math.cos(carRotationRadians),
+        rearAxle[1] + currentSpeed * dt * math.sin(carRotationRadians)
+    )
+
+    # Update player position to be between the two axles
+    player_pos.x = (frontAxle[0] + rearAxle[0]) / 2
+    player_pos.y = (frontAxle[1] + rearAxle[1]) / 2
+
+    return player_pos, math.degrees(carRotationRadians), carRotationRadians
+
+
+def calculateAngularForce(currentSpeed, turningRadius, carMass=1200):
+    if turningRadius == 0:
+        return 0
+    angularForce = (carMass * (currentSpeed ** 2)) / turningRadius
+    return angularForce
+
+
+def calculateAxlePosition(carRotationRadians):
+    axle_offset = carWidth * -0.2  # Assuming carHeight is the full height of the car
+    frontAxleLocation = (
+        player_pos.x + (carWidth / 2) * math.cos(carRotationRadians),  # half of height to center
+        player_pos.y + (carWidth / 2) * math.sin(carRotationRadians)  # half of height to center
+    )
+    frontAxleLocation = (
+        frontAxleLocation[0] + axle_offset * math.cos(carRotationRadians),
+        frontAxleLocation[1] + axle_offset * math.sin(carRotationRadians)
+    )
+    rearAxleLocation = (
+        player_pos.x - (carWidth / 2) * math.cos(carRotationRadians),  # half of height to center
+        player_pos.y - (carWidth / 2) * math.sin(carRotationRadians)  # half of height to center
+    )
+    rearAxleLocation = (
+        rearAxleLocation[0] - axle_offset * math.cos(carRotationRadians),
+        rearAxleLocation[1] - axle_offset * math.sin(carRotationRadians)
+    )
+    return frontAxleLocation, rearAxleLocation
+
+
 pg.init()
 screen = pg.display.set_mode((1280, 720))
 running = True
 clock = pg.time.Clock()
 
 # CAR VARIABLES
-acceleration = 50
+acceleration = 250
 coastingDeceleration = 50
-brakingDeceleration = 150
-topSpeed = 300
-
+brakingDeceleration = 500
+topSpeed = 500
+axleOffset = 0.25
+tireRotation = 55
 
 # PG VARIABLES
-rotation = 270
+carRotation = 270
+frontAxleRotation = 0
+
 currentSpeed = 0
 player_pos = pg.Vector2(screen.get_width() / 2, screen.get_height() / 2)
 
@@ -35,10 +159,6 @@ while running:
 
     screen.fill('black')
 
-    rotatedCarImage = pg.transform.rotate(carImage, -rotation)
-    rotatedCar = rotatedCarImage.get_rect(center=(player_pos.x, player_pos.y))
-    screen.blit(rotatedCarImage, rotatedCar.topleft)
-
     keys = pg.key.get_pressed()
     if keys[pg.K_w]:
         currentSpeed += acceleration * dt
@@ -54,17 +174,49 @@ while running:
         if currentSpeed < 0:
             currentSpeed = 0
 
-    if currentSpeed != 0:
-        distance = currentSpeed * dt
-        rotationRadians = math.radians(rotation)
-        player_pos.y += distance * math.sin(rotationRadians)
-        player_pos.x += distance * math.cos(rotationRadians)
-
     if keys[pg.K_a]:
-        rotation += 120 * dt
+        if frontAxleRotation < -tireRotation:
+            frontAxleRotation = -tireRotation
+        else:
+            frontAxleRotation -= 25 * dt
     if keys[pg.K_d]:
-        rotation -= 120 * dt
-    rotation %= 360
+        if frontAxleRotation > tireRotation:
+            frontAxleRotation = tireRotation
+        else:
+            frontAxleRotation += 25 * dt
+    if keys[pg.K_d] and keys[pg.K_a]:
+        if frontAxleRotation > 0:
+            frontAxleRotation -= 25
+        elif frontAxleRotation < 0:
+            frontAxleRotation += 25
+    elif not keys[pg.K_d] and not keys[pg.K_a]:  # No input
+        if frontAxleRotation > 0:
+            frontAxleRotation = max(0, frontAxleRotation - 5)  # Gradually reduce to 0
+        elif frontAxleRotation < 0:
+            frontAxleRotation = min(0, frontAxleRotation + 5)  # Gradually increase to 0
+
+    carRotation %= 360
+
+    carRotationRadians = math.radians(carRotation)
+    frontAxleRotationRadians = math.radians(frontAxleRotation)
+
+    player_pos, carRotation, carRotationRadians = positionUpdates(currentSpeed, frontAxleRotationRadians,
+                                                                  carRotationRadians)
+    # Rotate and display the car image
+    rotatedCarImage = pg.transform.rotate(carImage, -carRotation)
+    rotatedCar = rotatedCarImage.get_rect(center=(player_pos.x, player_pos.y))
+    screen.blit(rotatedCarImage, rotatedCar.topleft)
+
+    # Draw circles at the front and rear axle positions
+    frontAxleLocation, rearAxleLocation = calculateAxlePosition(carRotationRadians)
+    pg.draw.circle(screen, 'blue', (int(frontAxleLocation[0]), int(frontAxleLocation[1])), 5)
+    pg.draw.circle(screen, 'blue', (int(rearAxleLocation[0]), int(rearAxleLocation[1])), 5)
+
+    # Visualize the direction of the front axle
+    # pg.draw.circle(screen, 'red', (
+    #     int(frontAxleLocation[0] + 50 * math.sin(frontAxleRotationRadians)),
+    #     int(frontAxleLocation[1] + 50 * math.cos(frontAxleRotationRadians))
+    # ), 5)
 
     pg.display.flip()
 
